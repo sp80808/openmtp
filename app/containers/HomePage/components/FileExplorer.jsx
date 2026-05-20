@@ -1891,7 +1891,6 @@ class FileExplorer extends Component {
       let anchorIndex = sortedNodes.findIndex((item) => item.path === anchorPath);
 
       if (
-        anchorIndex === null ||
         anchorIndex < 0 ||
         anchorIndex >= sortedNodes.length
       ) {

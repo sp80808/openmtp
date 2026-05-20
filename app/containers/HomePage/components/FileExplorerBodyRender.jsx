@@ -442,7 +442,6 @@ class FileExplorerBodyRender extends PureComponent {
       isStatusBarEnabled,
       fileTransferClipboard,
       mtpDevice,
-      onTableSelectionChange, // eslint-disable-line no-unused-vars
       ...parentProps
     } = this.props;
     const { directoryLists } = this.props;
