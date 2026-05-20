@@ -26,6 +26,20 @@ class FileExplorerBodyRender extends PureComponent {
       FILE_EXPLORER_DEFAULT_FOCUSSED_DEVICE_TYPE;
     this.fileExplorerBodyWrapperId = `${FILE_EXPLORER_BODY_WRAPPER_ID}-${deviceType}`;
     this.acceleratorIgnoreList = ['multipleSelectClick'];
+    this.lassoRaf = null;
+    this.pendingLassoMouseEvent = null;
+    this.state = {
+      lasso: {
+        active: false,
+        startClientX: 0,
+        startClientY: 0,
+        left: 0,
+        top: 0,
+        width: 0,
+        height: 0,
+        initialSelected: [],
+      },
+    };
   }
 
   componentDidMount() {
@@ -39,6 +53,7 @@ class FileExplorerBodyRender extends PureComponent {
 
   componentWillUnmount() {
     hotkeys.unbind(this.fileExplorerKeymapString);
+    this._removeLassoMouseListeners();
   }
 
   focusItem = () => {
@@ -269,6 +284,152 @@ class FileExplorerBodyRender extends PureComponent {
     return false;
   };
 
+  _removeLassoMouseListeners = () => {
+    document.removeEventListener('mousemove', this._handleLassoMouseMove);
+    document.removeEventListener('mouseup', this._handleLassoMouseUp);
+
+    if (this.lassoRaf !== null) {
+      window.cancelAnimationFrame(this.lassoRaf);
+      this.lassoRaf = null;
+    }
+
+    this.pendingLassoMouseEvent = null;
+  };
+
+  _shouldStartLasso = (event) => {
+    if (event.button !== 0) {
+      return false;
+    }
+
+    const target = event.target;
+
+    if (!target || typeof target.closest !== 'function') {
+      return false;
+    }
+
+    return (
+      target === event.currentTarget ||
+      !target.closest('[data-selectable-item="true"]')
+    );
+  };
+
+  _handleLassoMouseDown = (event) => {
+    const { directoryLists, deviceType } = this.props;
+
+    if (!this._shouldStartLasso(event)) {
+      return;
+    }
+
+    event.preventDefault();
+    this._removeLassoMouseListeners();
+
+    this.setState({
+      lasso: {
+        active: true,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        left: 0,
+        top: 0,
+        width: 0,
+        height: 0,
+        initialSelected: [...(directoryLists[deviceType]?.queue?.selected || [])],
+      },
+    });
+
+    document.addEventListener('mousemove', this._handleLassoMouseMove);
+    document.addEventListener('mouseup', this._handleLassoMouseUp);
+  };
+
+  _handleLassoMouseMove = (event) => {
+    this.pendingLassoMouseEvent = event;
+
+    if (this.lassoRaf !== null) {
+      return;
+    }
+
+    this.lassoRaf = window.requestAnimationFrame(() => {
+      this.lassoRaf = null;
+      const latestEvent = this.pendingLassoMouseEvent;
+      this.pendingLassoMouseEvent = null;
+
+      if (latestEvent) {
+        this._processLassoMouseMove(latestEvent);
+      }
+    });
+  };
+
+  _processLassoMouseMove = (event) => {
+    const { lasso } = this.state;
+    const { deviceType, onTableSelectionChange } = this.props;
+
+    if (!lasso.active || !this.fileExplorerBodyWrapper) {
+      return;
+    }
+
+    const wrapperRect = this.fileExplorerBodyWrapper.getBoundingClientRect();
+    const boxLeft = Math.min(lasso.startClientX, event.clientX);
+    const boxTop = Math.min(lasso.startClientY, event.clientY);
+    const boxRight = Math.max(lasso.startClientX, event.clientX);
+    const boxBottom = Math.max(lasso.startClientY, event.clientY);
+
+    const selectableItems = this.fileExplorerBodyWrapper.querySelectorAll(
+      '[data-selectable-item="true"][data-file-path]'
+    );
+
+    const intersectedPaths = [];
+
+    selectableItems.forEach((node) => {
+      const rect = node.getBoundingClientRect();
+      const intersects = !(
+        rect.right < boxLeft ||
+        rect.left > boxRight ||
+        rect.bottom < boxTop ||
+        rect.top > boxBottom
+      );
+
+      if (intersects) {
+        const filePath = node.getAttribute('data-file-path');
+
+        if (filePath) {
+          intersectedPaths.push(filePath);
+        }
+      }
+    });
+
+    onTableSelectionChange(
+      Array.from(new Set([...lasso.initialSelected, ...intersectedPaths])),
+      deviceType
+    );
+
+    this.setState({
+      lasso: {
+        ...lasso,
+        left: boxLeft - wrapperRect.left + this.fileExplorerBodyWrapper.scrollLeft,
+        top: boxTop - wrapperRect.top + this.fileExplorerBodyWrapper.scrollTop,
+        width: boxRight - boxLeft,
+        height: boxBottom - boxTop,
+      },
+    });
+  };
+
+  _handleLassoMouseUp = () => {
+    const { lasso } = this.state;
+
+    if (!lasso.active) {
+      return;
+    }
+
+    this._removeLassoMouseListeners();
+    this.setState({
+      lasso: {
+        ...lasso,
+        active: false,
+        width: 0,
+        height: 0,
+      },
+    });
+  };
+
   render() {
     const {
       classes: styles,
@@ -281,9 +442,11 @@ class FileExplorerBodyRender extends PureComponent {
       isStatusBarEnabled,
       fileTransferClipboard,
       mtpDevice,
+      onTableSelectionChange, // eslint-disable-line no-unused-vars
       ...parentProps
     } = this.props;
     const { directoryLists } = this.props;
+    const { lasso } = this.state;
 
     const _eventTarget = 'tableWrapperTarget';
 
@@ -314,6 +477,7 @@ class FileExplorerBodyRender extends PureComponent {
           onDragEnd={this._handleOnDragEnd}
           onDrop={this._handleOnDrop}
           onDragLeave={this._handleExternalFileDragLeave}
+          onMouseDown={this._handleLassoMouseDown}
         >
           <FileExplorerTableBodyRender
             tableData={this.tableData()}
@@ -323,6 +487,17 @@ class FileExplorerBodyRender extends PureComponent {
             mtpDevice={mtpDevice}
             {...parentProps}
           />
+          {lasso.active && (
+            <div
+              className={styles.selectionLasso}
+              style={{
+                left: lasso.left,
+                top: lasso.top,
+                width: lasso.width,
+                height: lasso.height,
+              }}
+            />
+          )}
         </div>
         <FileExplorerTableFooterRender
           deviceType={deviceType}

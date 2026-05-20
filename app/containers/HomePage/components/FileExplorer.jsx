@@ -213,6 +213,10 @@ class FileExplorer extends Component {
     this.keyedAcceleratorList = {
       shift: false,
     };
+    this.selectionAnchorPath = {
+      [DEVICE_TYPE.local]: null,
+      [DEVICE_TYPE.mtp]: null,
+    };
 
     this.usbHotplug = {
       attempts: 0,
@@ -1842,6 +1846,15 @@ class FileExplorer extends Component {
     actionCreateSelectAllClick({ selected }, isChecked, deviceType);
   };
 
+  _handleTableSelectionChange = (selected, deviceType) => {
+    const { actionCreateTableClick } = this.props;
+
+    actionCreateTableClick(
+      { selected: removeArrayDuplicates(selected || []) },
+      deviceType
+    );
+  };
+
   _handleTableClick = (
     path,
     deviceType,
@@ -1854,10 +1867,48 @@ class FileExplorer extends Component {
     }
 
     const { directoryLists, actionCreateTableClick } = this.props;
-    const { selected } = directoryLists[deviceType].queue;
+    const { nodes, order, orderBy, queue } = directoryLists[deviceType];
+    const { selected } = queue;
     const selectedIndex = selected.indexOf(path);
+    const isShiftRangeSelect = event?.type === 'click' && event?.shiftKey;
     let _dontAppend = dontAppend;
     let newSelected = [];
+
+    if (isShiftRangeSelect) {
+      const sortedNodes = this.tableSort({
+        nodes,
+        order,
+        orderBy,
+      });
+
+      const clickedIndex = sortedNodes.findIndex((item) => item.path === path);
+
+      if (clickedIndex < 0) {
+        return;
+      }
+
+      const anchorPath = this.selectionAnchorPath[deviceType] || path;
+      let anchorIndex = sortedNodes.findIndex((item) => item.path === anchorPath);
+
+      if (
+        anchorIndex === null ||
+        anchorIndex < 0 ||
+        anchorIndex >= sortedNodes.length
+      ) {
+        anchorIndex = clickedIndex;
+      }
+
+      const rangeStart = Math.min(anchorIndex, clickedIndex);
+      const rangeEnd = Math.max(anchorIndex, clickedIndex);
+
+      newSelected = sortedNodes
+        .slice(rangeStart, rangeEnd + 1)
+        .map((item) => item.path);
+
+      actionCreateTableClick({ selected: newSelected }, deviceType);
+
+      return;
+    }
 
     if (shiftKeyAcceleratorEnable && this.keyedAcceleratorList.shift) {
       _dontAppend = false;
@@ -1877,6 +1928,8 @@ class FileExplorer extends Component {
         selected.slice(selectedIndex + 1)
       );
     }
+
+    this.selectionAnchorPath[deviceType] = path;
 
     actionCreateTableClick({ selected: newSelected }, deviceType);
   };
@@ -2175,6 +2228,7 @@ class FileExplorer extends Component {
           onContextMenuClick={this._handleContextMenuClick}
           onTableDoubleClick={this._handleTableDoubleClick}
           onTableClick={this._handleTableClick}
+          onTableSelectionChange={this._handleTableSelectionChange}
           onIsDraggable={this._handleIsDraggable}
           onExternalFileDragLeave={this._handleExternalFileDragLeave}
           onFocussedFileExplorerDeviceType={
