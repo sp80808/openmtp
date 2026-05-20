@@ -7,6 +7,7 @@ export const styles = (theme) => ({
   },
   tableWrapper: {
     ...mixins({ theme }).noOutline,
+    position: 'relative',
     height: `calc(100vh - 120px)`,
     overflowY: 'auto',
     overflowX: 'auto',
@@ -18,5 +19,12 @@ export const styles = (theme) => ({
     [`&.statusBarActive`]: {
       height: `calc(100vh - 150px) !important`,
     },
+  },
+  selectionLasso: {
+    position: 'absolute',
+    border: '1px solid rgba(41, 121, 255, 0.9)',
+    backgroundColor: 'rgba(41, 121, 255, 0.2)',
+    pointerEvents: 'none',
+    zIndex: 10,
   },
 });
