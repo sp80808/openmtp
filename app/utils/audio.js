@@ -37,8 +37,8 @@ export const playTransferSuccessChime = () => {
       const noteStartAt = startAt + index * NOTE_STAGGER_SECONDS;
       const noteEndsAt = noteStartAt + NOTE_DURATION_SECONDS;
 
-      let oscillator = audioContext.createOscillator();
-      let gainNode = audioContext.createGain();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
 
       oscillator.type = 'sine';
       oscillator.frequency.setValueAtTime(frequency, noteStartAt);
@@ -59,8 +59,6 @@ export const playTransferSuccessChime = () => {
         oscillator.disconnect();
         gainNode.disconnect();
         oscillator.onended = null;
-        oscillator = null;
-        gainNode = null;
       };
     });
   };
