@@ -108,6 +108,7 @@ import fileExplorerController from '../../../data/file-explorer/controllers/File
 import { checkIf } from '../../../utils/checkIf';
 import { analyticsService } from '../../../services/analytics';
 import { EVENT_TYPE } from '../../../enums/events';
+import { playTransferSuccessChime } from '../../../utils/audio';
 import {
   buyMeACoffeeText,
   supportUsingPayPal,
@@ -2654,6 +2655,7 @@ const mapDispatchToProps = (dispatch, _) =>
               dispatch(
                 listDirectory({ ...listDirectoryArgs }, deviceType, getState)
               );
+              playTransferSuccessChime();
 
               analyticsService.sendEvent(EVENT_TYPE.FILE_TRANSFER_COMPLETED, {
                 'Transfer direction': sessionTransferDirection,
