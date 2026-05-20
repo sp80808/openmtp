@@ -30,34 +30,49 @@ export const playTransferSuccessChime = () => {
     return;
   }
 
+  const playChime = () => {
+    const startAt = audioContext.currentTime + 0.01;
+
+    SUCCESS_CHIME_NOTES.forEach((frequency, index) => {
+      const noteStartAt = startAt + index * NOTE_STAGGER_SECONDS;
+      const noteEndsAt = noteStartAt + NOTE_DURATION_SECONDS;
+
+      let oscillator = audioContext.createOscillator();
+      let gainNode = audioContext.createGain();
+
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(frequency, noteStartAt);
+
+      gainNode.gain.setValueAtTime(0.0001, noteStartAt);
+      gainNode.gain.exponentialRampToValueAtTime(
+        MASTER_GAIN,
+        noteStartAt + 0.01
+      );
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, noteEndsAt);
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.start(noteStartAt);
+      oscillator.stop(noteEndsAt);
+      oscillator.onended = () => {
+        oscillator.disconnect();
+        gainNode.disconnect();
+        oscillator.onended = null;
+        oscillator = null;
+        gainNode = null;
+      };
+    });
+  };
+
   if (audioContext.state === 'suspended') {
-    audioContext.resume().catch(() => null);
+    audioContext
+      .resume()
+      .then(playChime)
+      .catch(() => undefined);
+
+    return;
   }
 
-  const startAt = audioContext.currentTime + 0.01;
-
-  SUCCESS_CHIME_NOTES.forEach((frequency, index) => {
-    const noteStartAt = startAt + index * NOTE_STAGGER_SECONDS;
-    const noteEndsAt = noteStartAt + NOTE_DURATION_SECONDS;
-
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(frequency, noteStartAt);
-
-    gainNode.gain.setValueAtTime(0.0001, noteStartAt);
-    gainNode.gain.exponentialRampToValueAtTime(MASTER_GAIN, noteStartAt + 0.01);
-    gainNode.gain.exponentialRampToValueAtTime(0.0001, noteEndsAt);
-
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-
-    oscillator.start(noteStartAt);
-    oscillator.stop(noteEndsAt);
-    oscillator.onended = () => {
-      oscillator.disconnect();
-      gainNode.disconnect();
-    };
-  });
+  playChime();
 };
